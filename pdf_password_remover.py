@@ -1,115 +1,104 @@
-"""
-PDF Password Remover Script
-Removes password protection from a PDF file.
-Requires: pip install pypdf
-"""
-
 from pypdf import PdfReader, PdfWriter
-import sys
 import os
+import getpass
 
 
 def remove_pdf_password(input_path, output_path, password):
-    """
-    Remove password protection from a PDF file.
-    
-    Args:
-        input_path (str): Path to the password-protected PDF
-        output_path (str): Path where the unlocked PDF will be saved
-        password (str): Password to decrypt the PDF
-    
-    Returns:
-        bool: True if successful, False otherwise
-    """
     try:
-        # Read the encrypted PDF
         reader = PdfReader(input_path)
-        
-        # Check if PDF is encrypted
+
         if not reader.is_encrypted:
-            print(f"PDF '{input_path}' is not password protected.")
+            print(f"[SKIP] {os.path.basename(input_path)} is not password protected.")
             return False
-        
-        # Decrypt the PDF with the password
-        if not reader.decrypt(password):
-            print("Incorrect password. Failed to decrypt PDF.")
+
+        if reader.decrypt(password) == 0:
+            print(f"[FAIL] Incorrect password for {os.path.basename(input_path)}")
             return False
-        
-        # Create a writer object
+
         writer = PdfWriter()
-        
-        # Copy all pages to the writer
+
         for page in reader.pages:
             writer.add_page(page)
-        
-        # Write the unencrypted PDF to output file
-        with open(output_path, 'wb') as output_file:
+
+        with open(output_path, "wb") as output_file:
             writer.write(output_file)
-        
-        print(f"Successfully removed password protection.")
-        print(f"Unlocked PDF saved to: {output_path}")
+
+        print(f"[OK] {os.path.basename(input_path)}")
         return True
-        
-    except FileNotFoundError:
-        print(f"Error: File '{input_path}' not found.")
-        return False
+
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"[FAIL] {os.path.basename(input_path)}: {e}")
         return False
 
 
-def validate_paths(input_path, output_path):
-    """
-    Validate input and output file paths.
-    
-    Args:
-        input_path (str): Input PDF file path
-        output_path (str): Output PDF file path
-    
-    Returns:
-        bool: True if paths are valid, False otherwise
-    """
-    # Check if input file exists
+def unlock_single():
+    input_path = input("\nEnter PDF path: ").strip('"')
+
     if not os.path.exists(input_path):
-        print(f"Error: Input file '{input_path}' does not exist.")
-        return False
-    
-    # Check if input file is a PDF
-    if not input_path.lower().endswith('.pdf'):
-        print("Error: Input file must be a PDF.")
-        return False
-    
-    # Check if output path is valid
-    output_dir = os.path.dirname(output_path)
-    if output_dir and not os.path.exists(output_dir):
-        print(f"Error: Output directory '{output_dir}' does not exist.")
-        return False
-    
-    return True
+        print("File not found.")
+        return
+
+    password = getpass.getpass("Enter PDF password: ")
+
+    output_dir = os.path.join(os.path.dirname(input_path), "unlocked")
+    os.makedirs(output_dir, exist_ok=True)
+
+    output_path = os.path.join(output_dir, os.path.basename(input_path))
+
+    remove_pdf_password(input_path, output_path, password)
+
+
+def unlock_current_directory():
+    current_dir = os.getcwd()
+
+    pdfs = [
+        f for f in os.listdir(current_dir)
+        if f.lower().endswith(".pdf")
+    ]
+
+    if not pdfs:
+        print("No PDF files found in current directory.")
+        return
+
+    password = getpass.getpass("Enter PDF password: ")
+
+    output_dir = os.path.join(current_dir, "unlocked")
+    os.makedirs(output_dir, exist_ok=True)
+
+    print(f"\nFound {len(pdfs)} PDF(s).\n")
+
+    success = 0
+
+    for pdf in pdfs:
+        input_path = os.path.join(current_dir, pdf)
+        output_path = os.path.join(output_dir, pdf)
+
+        if remove_pdf_password(input_path, output_path, password):
+            success += 1
+
+    print(f"\nCompleted: {success}/{len(pdfs)} PDFs unlocked.")
 
 
 def main():
-    """
-    Main function to handle command-line execution.
-    """
-    if len(sys.argv) != 4:
-        print("Usage: python script.py <input_pdf> <output_pdf> <password>")
-        print("\nExample:")
-        print("  python script.py protected.pdf unlocked.pdf mypassword123")
-        sys.exit(1)
-    
-    input_path = sys.argv[1]
-    output_path = sys.argv[2]
-    password = sys.argv[3]
-    
-    # Validate paths
-    if not validate_paths(input_path, output_path):
-        sys.exit(1)
-    
-    # Remove password
-    success = remove_pdf_password(input_path, output_path, password)
-    
-    sys.exit(0 if success else 1)
+    print("=" * 45)
+    print("         PDF Password Remover")
+    print("=" * 45)
+
+    print("\nChoose an option:")
+    print("1. Unlock a single PDF")
+    print("2. Unlock all PDFs in current directory")
+
+    while True:
+        choice = input("\nEnter choice (1/2): ").strip()
+
+        if choice == "1":
+            unlock_single()
+            break
+        elif choice == "2":
+            unlock_current_directory()
+            break
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
 
 
 if __name__ == "__main__":
